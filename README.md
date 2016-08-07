@@ -9,6 +9,24 @@ A research project done as part of the Talented Student Program at the
 University of Sydney. [This paper][pqs-paper] is the core thing this
 project is planning to explore.
 
+### Goal ###
+
+The goal of this project is to produce a numerical, soliton-like
+solution for the differential equation:
+
+```latex
+\frac{\partial A}{\partial z} =
+		i \frac{\beta_4}{24} \frac{\partial^4 A}{\partial t^4} +
+		i \gamma_{eff} {\left|A\right|}^{2} A
+```
+
+This is much harder than it sounds, since it essentially resolves to
+being a boundary value problem with 8 real parameters (4 complex
+parameters), but it can be reduced to 3 real parameters through a bunch
+of clever tricks.  Similarly, the search can be constrained using
+further tricks. And finally, it all boils down to a bruteforce of the
+search space.
+
 ### License ###
 
 This project is licensed under the GNU General Public License, version 3 or
