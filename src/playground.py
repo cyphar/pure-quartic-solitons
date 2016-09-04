@@ -14,9 +14,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import math
 import cmath
+
+import matplotlib
+matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid.anchored_artists import AnchoredText
 import numpy
+import numpy.random
 import random
 import scipy
 import scipy.integrate
@@ -47,17 +53,18 @@ def latexify(ax):
 # This is a configuration parameter for the fourth-order ODE.
 GAMMA = 1
 
+
 # First of all, we're interested in integrating from the wings. If you
 # look at the key equation from the paper you can ignore the
 # non-linearity when the amplitude is small (|A| ~ 0). This results in a
 # simple fourth-order linear ODE:
 #
 # \frac{\partial A}{\partial z} =
-#         i \frac{\beta_4}{24} \frac{\partial^4 a}{\partial t^4}
+#         i \frac{\beta_4}{24} \frac{\partial^4 A}{\partial t^4}
 #
 # You apply the standard assumption, that A is of the form:
 #
-#                       A(z,t) = e^{i\Gamma t}a(t)
+#                       A(z,t) = e^{i\Gamma z}a(t)
 #
 # This reduces the PDE to an ODE:
 #
@@ -81,14 +88,15 @@ GAMMA = 1
 # parameters. In addition, solutions of an ODE can be rotated in phase space
 # and will still be solutions. Thus, by picking an arbitrary \theta, you can
 # reduce the problem to only 3 real parameters (1 complex, 1 real).
-def init(a, b, c, t):
-	lamb1 = GAMMA * cmath.exp(1j * cmath.pi/4.0 + 0 * cmath.pi/2.0)
-	lamb2 = GAMMA * cmath.exp(1j * cmath.pi/4.0 + 1 * cmath.pi/2.0)
+def init(t, eta, theta, phi):
+	return [eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 0) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 0) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t))),
+	        eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 1) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 1) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t))),
+	        eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 2) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 2) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t))),
+	        eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 3) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 3) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t)))]
 
-	return [           a * cmath.exp(lamb1 * t) +            (a + b*1j) * cmath.exp(lamb2 * t),
-	        lamb1    * a * cmath.exp(lamb1 * t) + lamb2    * (a + b*1j) * cmath.exp(lamb2 * t),
-	        lamb1**2 * a * cmath.exp(lamb1 * t) + lamb2**2 * (a + b*1j) * cmath.exp(lamb2 * t),
-	        lamb1**3 * a * cmath.exp(lamb1 * t) + lamb2**3 * (a + b*1j) * cmath.exp(lamb2 * t)]
+def middle(eta, theta, phi):
+	return math.log((2 * GAMMA**2) / (eta * (1 + math.sin(theta) ** 2))) / GAMMA
+	# return math.log((2 * GAMMA**2) / eta) / GAMMA
 
 # We need to first convert the key equation from the paper to an ODE. If
 # you assume that A is of the form:
@@ -108,58 +116,104 @@ def init(a, b, c, t):
 #        \Delta' &= \Gamma\alpha - {\left|\alpha\right|}^2 \alpha
 def soliton(t, y):
 	a, b, c, d = y
-	return [b, c, d, GAMMA*a - a*abs(a)**2]
+	# return [b, c, d, -4*(GAMMA**4)*a]
+	return [b, c, d, -4*(GAMMA**4)*a + a*abs(a)**2]
 
 # Solver.
-def solve(t0, t1, dt):
-	a = random.random() * 0.001
-	b = random.random() * 0.001
-	c = random.random() * 0.001
-	start = init(a, b, c, t0)
-
+def solve(t0, t1, dt, start):
 	solver = scipy.integrate.ode(soliton)
-	solver.set_integrator("zvode", method="adams", order=10)
+	solver.set_integrator("zvode", method="adams", order=12)
 	solver.set_initial_value(start, t0)
 
 	As = []
 	while solver.successful() and solver.t < t1:
 		solver.integrate(solver.t + dt)
 		As.append((solver.t, solver.y[0]))
-		print("%s %s" % (solver.t, solver.y))
 
 	ts, As = numpy.array(As).T
-
 	return ts, As
 
 def main():
-	t0 = 1e-10
-	t1 = 30
-	dt = 0.001
-
-	out = "test-%d.png" % (random.randrange(0, 999999),)
+	dt = 0.005
 
 	fig = plt.figure(figsize=(10, 10), dpi=80)
 	ax1 = latexify(fig.add_subplot("211"))
 	ax2 = latexify(fig.add_subplot("212"))
 
-	for i in range(1):
-		# TODO: Plot the amplitude and phase.
-		#  XXX: Is the phase going to be flat? Is that a property of the DEs?
-		ts, As = solve(t0, t1, dt)
-		ax1.plot(ts, abs(As))
-		ax2.plot(ts, cmath.phase(As))
+	num = 8
+	thetaspace = numpy.linspace(0, 2*math.pi, num=num)
+	phispace = numpy.linspace(0, math.pi, num=num)
+	etaspace = 1e-14 * numpy.exp(numpy.linspace(0, 2*math.pi, num=num))
 
-	ax.set_axisbelow(True)
-	ax.set_xlabel("Time (s)")
-	ax.set_ylabel("Intensity ($|A|^2$)")
-	ax.set_xlim([t0, t1])
-	ax.set_ylim([0, None])
+	# TODO: Vectorise
+	for theta in thetaspace:
+		for phi in phispace:
+			for eta in etaspace:
+				t0 = 0
+				t1 = 4*math.pi
+				t1 = 2*middle(eta, theta, phi)
+
+				start = init(t0, eta, theta, phi)
+				# print(".")
+				ts, As = solve(t0, t1, dt, start)
+				ax1.plot(ts, numpy.vectorize(abs)(As))
+				ax2.plot(ts, numpy.vectorize(cmath.phase)(As))
+
+
+	theta = numpy.random.choice(thetaspace)
+	phi = numpy.random.choice(phispace)
+	eta = numpy.random.choice(etaspace)
+
+	# theta=0.778564516011
+	# eta=1.71455095837e-14
+	# phi=0.0980274935414
+
+	# theta = 3.94812014051
+	# eta = 2.43519024939e-12
+	# phi = 0.465630594321
+
+	t0 = 0
+	mid = middle(eta, theta, phi)
+	t1 = 2*mid
+
+	start = init(t0, eta, theta, phi)
+	ts, As = solve(t0, t1, dt, start)
+
+	# # now plot theoretical
+	# ax1.set_title(r"{$\theta = %s, \eta = %s, \phi = %s$}" % (theta, eta, phi))
+
+	# # plot integration
+	# ax1.plot(ts, numpy.vectorize(abs)(As), 'k')
+	# ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'k')
+
+	# As = eta * numpy.exp(GAMMA * ts) * (((GAMMA * (1+1j)) ** 0) * numpy.cos(theta) * numpy.exp(1j * GAMMA * ts) + ((GAMMA * (1-1j)) ** 0) * numpy.sin(theta) * numpy.exp(1j * (phi - GAMMA * ts)))
+	# # As = numpy.cos(theta) * numpy.exp(1j * ts) + numpy.sin(theta) * numpy.exp(1j * (phi - ts))
+	# ax1.plot(ts, numpy.vectorize(abs)(As), 'r')
+	# ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'r')
+
+	ax1.set_yscale("log")
+	ax1.set_axisbelow(True)
+	ax1.set_xlabel(r"Time ($\tau$)")
+	ax1.set_ylabel(r"Amplitude ($|A|$)")
+	ax1.set_xlim([t0, t1])
+
+	ax1.xaxis.set_ticks([mid], minor=True)
+	ax1.xaxis.grid(True, which="minor", color="k", linestyle=":")
+	ax2.xaxis.set_ticks([mid], minor=True)
+	ax2.xaxis.grid(True, which="minor", color="k", linestyle=":")
+
+	ax2.set_axisbelow(True)
+	ax2.set_xlabel(r"Time ($\tau$)")
+	ax2.set_ylabel(r"Phase")
+	ax2.set_xlim([t0, t1])
+	ax2.set_ylim([-math.pi, math.pi])
 
 	plt.legend()
 	fig.tight_layout()
 
-	plt.savefig(out)
-	print(out)
+	plt.show()
+	# plt.savefig(out)
+	# print(out)
 
 
 if __name__ == "__main__":
