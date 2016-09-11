@@ -16,7 +16,7 @@
 
 import math
 import cmath
-
+import csv
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
@@ -44,6 +44,32 @@ def latexify(ax):
 		axis.set_tick_params(direction="out", color=SPINE_COLOR)
 
 	return ax
+
+def csv_column_read(f, fieldnames, casts=None, start=None, end=None, reset=False):
+	if casts is None or len(fieldnames) != len(casts):
+		casts = [object] * len(fieldnames)
+
+	def parse_row(row):
+		row = {k: v for k, v in row.items() if k in fieldnames}
+		return [row[key] for key in sorted(row.keys(), key=lambda k: fieldnames.index(k))]
+
+	if reset:
+		pos = f.tell()
+
+	reader = csv.DictReader(f)
+	rows = [[cast(field) for cast, field in zip(casts, fields)] for fields in (parse_row(row) for row in reader)]
+
+	if reset:
+		f.seek(pos)
+
+	return [numpy.array(col[start:end], dtype=cast) for cast, col in zip(casts, zip(*rows))]
+
+def csv_column_write(f, cols, fieldnames):
+	writer = csv.DictWriter(f, fieldnames=fieldnames)
+	writer.writeheader()
+
+	for fields in zip(*cols):
+		writer.writerow({fieldnames[i]: field for i, field in enumerate(fields)})
 
 # The key equation (from the paper):
 # \frac{\partial A}{\partial z} =
@@ -134,31 +160,41 @@ def solve(t0, t1, dt, start):
 	return ts, As
 
 def main():
-	dt = 0.005
+	dt = 0.001
 
-	fig = plt.figure(figsize=(10, 10), dpi=80)
-	ax1 = latexify(fig.add_subplot("211"))
-	ax2 = latexify(fig.add_subplot("212"))
+	# fig = plt.figure(figsize=(10, 10), dpi=80)
+	# ax1 = latexify(fig.add_subplot("211"))
+	# ax2 = latexify(fig.add_subplot("212"))
 
-	num = 8
+	num = 200
 	thetaspace = numpy.linspace(0, 2*math.pi, num=num)
 	phispace = numpy.linspace(0, math.pi, num=num)
 	etaspace = 1e-14 * numpy.exp(numpy.linspace(0, 2*math.pi, num=num))
 
-	# TODO: Vectorise
-	for theta in thetaspace:
-		for phi in phispace:
-			for eta in etaspace:
-				t0 = 0
-				t1 = 4*math.pi
-				t1 = 2*middle(eta, theta, phi)
+	fname = "interesting-%s.csv" % (random.randint(0, 99999999),)
+	print(fname)
+	with open(fname, "w") as f:
+		writer = csv.DictWriter(f, fieldnames=["theta", "phi", "eta"])
+		writer.writeheader()
+		f.flush()
 
-				start = init(t0, eta, theta, phi)
-				# print(".")
-				ts, As = solve(t0, t1, dt, start)
-				ax1.plot(ts, numpy.vectorize(abs)(As))
-				ax2.plot(ts, numpy.vectorize(cmath.phase)(As))
+		# TODO: Vectorise
+		interesting = []
+		for theta in thetaspace:
+			for phi in phispace:
+				for eta in etaspace:
+					t0 = 0
+					t1 = 2*middle(eta, theta, phi)
 
+					start = init(t0, eta, theta, phi)
+					# print(".")
+					ts, As = solve(t0, t1, dt, start)
+					# ax1.plot(ts, numpy.vectorize(abs)(As))
+					# ax2.plot(ts, numpy.vectorize(cmath.phase)(As))
+
+					if ts.max() > 40:
+						writer.writerow({"theta": theta, "phi": phi, "eta": eta})
+						f.flush()
 
 	theta = numpy.random.choice(thetaspace)
 	phi = numpy.random.choice(phispace)
@@ -176,8 +212,8 @@ def main():
 	mid = middle(eta, theta, phi)
 	t1 = 2*mid
 
-	start = init(t0, eta, theta, phi)
-	ts, As = solve(t0, t1, dt, start)
+	# start = init(t0, eta, theta, phi)
+	# ts, As = solve(t0, t1, dt, start)
 
 	# # now plot theoretical
 	# ax1.set_title(r"{$\theta = %s, \eta = %s, \phi = %s$}" % (theta, eta, phi))
@@ -191,27 +227,27 @@ def main():
 	# ax1.plot(ts, numpy.vectorize(abs)(As), 'r')
 	# ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'r')
 
-	ax1.set_yscale("log")
-	ax1.set_axisbelow(True)
-	ax1.set_xlabel(r"Time ($\tau$)")
-	ax1.set_ylabel(r"Amplitude ($|A|$)")
-	ax1.set_xlim([t0, t1])
+	# ax1.set_yscale("log")
+	# ax1.set_axisbelow(True)
+	# ax1.set_xlabel(r"Time ($\tau$)")
+	# ax1.set_ylabel(r"Amplitude ($|A|$)")
+	# ax1.set_xlim([t0, t1])
 
-	ax1.xaxis.set_ticks([mid], minor=True)
-	ax1.xaxis.grid(True, which="minor", color="k", linestyle=":")
-	ax2.xaxis.set_ticks([mid], minor=True)
-	ax2.xaxis.grid(True, which="minor", color="k", linestyle=":")
+	# ax1.xaxis.set_ticks([mid], minor=True)
+	# ax1.xaxis.grid(True, which="minor", color="k", linestyle=":")
+	# ax2.xaxis.set_ticks([mid], minor=True)
+	# ax2.xaxis.grid(True, which="minor", color="k", linestyle=":")
 
-	ax2.set_axisbelow(True)
-	ax2.set_xlabel(r"Time ($\tau$)")
-	ax2.set_ylabel(r"Phase")
-	ax2.set_xlim([t0, t1])
-	ax2.set_ylim([-math.pi, math.pi])
+	# ax2.set_axisbelow(True)
+	# ax2.set_xlabel(r"Time ($\tau$)")
+	# ax2.set_ylabel(r"Phase")
+	# ax2.set_xlim([t0, t1])
+	# ax2.set_ylim([-math.pi, math.pi])
 
-	plt.legend()
-	fig.tight_layout()
+	# plt.legend()
+	# fig.tight_layout()
 
-	plt.show()
+	# plt.show()
 	# plt.savefig(out)
 	# print(out)
 
