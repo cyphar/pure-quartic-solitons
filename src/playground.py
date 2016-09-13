@@ -89,10 +89,19 @@ GAMMA = 1
 # and will still be solutions. Thus, by picking an arbitrary \theta, you can
 # reduce the problem to only 3 real parameters (1 complex, 1 real).
 def init(t, eta, theta, phi):
-	return [eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 0) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 0) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t))),
-	        eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 1) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 1) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t))),
-	        eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 2) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 2) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t))),
-	        eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 3) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 3) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t)))]
+	# return [eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 0) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 0) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t))),
+			# eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 1) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 1) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t))),
+			# eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 2) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 2) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t))),
+			# eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 3) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 3) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t)))]
+
+	alpha = eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 0) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 0) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t)))
+	beta  = eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 1) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 1) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t)))
+	gamma = eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 2) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 2) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t)))
+	delta = eta * math.exp(GAMMA * t) * (((GAMMA * (1+1j)) ** 3) * math.cos(theta) * cmath.exp(1j * GAMMA * t) + ((GAMMA * (1-1j)) ** 3) * math.sin(theta) * cmath.exp(1j * (phi - GAMMA * t)))
+
+	# Real then imaginary.
+	return [alpha.real, beta.real, gamma.real, delta.real,
+			alpha.imag, beta.imag, gamma.imag, delta.imag]
 
 def middle(eta, theta, phi):
 	return math.log((2 * GAMMA**2) / (eta * (1 + math.sin(theta) ** 2))) / GAMMA
@@ -115,20 +124,23 @@ def middle(eta, theta, phi):
 #        \gamma' &= \Delta
 #        \Delta' &= \Gamma\alpha - {\left|\alpha\right|}^2 \alpha
 def soliton(t, y):
-	a, b, c, d = y
+	aR, bR, cR, dR, aI, bI, cI, dI = y
+	# a, b, c, d = y
 	# return [b, c, d, -4*(GAMMA**4)*a]
-	return [b, c, d, -4*(GAMMA**4)*a + a*abs(a)**2]
+	# return [b, c, d, -4*(GAMMA**4)*a + a*abs(a)**2]
+	return [bR, cR, dR, -4*(GAMMA**4)*aR + aR * (aR**2 + aI**2),
+			bI, cI, dI, -4*(GAMMA**4)*aI + aI * (aR**2 + aI**2)]
 
 # Solver.
 def solve(t0, t1, dt, start):
 	solver = scipy.integrate.ode(soliton)
-	solver.set_integrator("zvode", method="adams", order=12)
+	solver.set_integrator("dop853", nsteps=2000)
 	solver.set_initial_value(start, t0)
 
 	As = []
 	while solver.successful() and solver.t < t1:
 		solver.integrate(solver.t + dt)
-		As.append((solver.t, solver.y[0]))
+		As.append((solver.t, solver.y[0] + 1j*solver.y[4]))
 
 	ts, As = numpy.array(As).T
 	return ts, As
@@ -140,25 +152,11 @@ def main():
 	ax1 = latexify(fig.add_subplot("211"))
 	ax2 = latexify(fig.add_subplot("212"))
 
-	num = 8
+	num = 500
 	thetaspace = numpy.linspace(0, 2*math.pi, num=num)
-	phispace = numpy.linspace(0, math.pi, num=num)
+	# phispace = numpy.linspace(0, math.pi, num=num)
+	phispace = numpy.logspace(1e-20, math.log10(2*math.pi), num=num)
 	etaspace = 1e-14 * numpy.exp(numpy.linspace(0, 2*math.pi, num=num))
-
-	# TODO: Vectorise
-	for theta in thetaspace:
-		for phi in phispace:
-			for eta in etaspace:
-				t0 = 0
-				t1 = 4*math.pi
-				t1 = 2*middle(eta, theta, phi)
-
-				start = init(t0, eta, theta, phi)
-				# print(".")
-				ts, As = solve(t0, t1, dt, start)
-				ax1.plot(ts, numpy.vectorize(abs)(As))
-				ax2.plot(ts, numpy.vectorize(cmath.phase)(As))
-
 
 	theta = numpy.random.choice(thetaspace)
 	phi = numpy.random.choice(phispace)
@@ -168,9 +166,22 @@ def main():
 	# eta=1.71455095837e-14
 	# phi=0.0980274935414
 
-	# theta = 3.94812014051
-	# eta = 2.43519024939e-12
-	# phi = 0.465630594321
+	theta = 3.94812014051
+	eta = 2.43519024939e-12
+	phi = 0.465630594321
+
+	# TODO: Vectorise
+	# for theta in thetaspace:
+	for phi in phispace:
+	# for eta in etaspace:
+		t0 = 0
+		t1 = 2*middle(eta, theta, phi)
+
+		start = init(t0, eta, theta, phi)
+		# print(".")
+		ts, As = solve(t0, t1, dt, start)
+		ax1.plot(ts, numpy.vectorize(abs)(As))
+		ax2.plot(ts, numpy.vectorize(cmath.phase)(As))
 
 	t0 = 0
 	mid = middle(eta, theta, phi)
@@ -179,17 +190,24 @@ def main():
 	start = init(t0, eta, theta, phi)
 	ts, As = solve(t0, t1, dt, start)
 
-	# # now plot theoretical
-	# ax1.set_title(r"{$\theta = %s, \eta = %s, \phi = %s$}" % (theta, eta, phi))
+	# now plot theoretical
+	ax1.set_title(r"{$\theta = %s, \eta = %s, \phi = %s$}" % (theta, eta, phi))
 
-	# # plot integration
-	# ax1.plot(ts, numpy.vectorize(abs)(As), 'k')
-	# ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'k')
+	# plot integration
+	ax1.plot(ts, numpy.vectorize(abs)(As), 'k')
+	ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'k')
 
-	# As = eta * numpy.exp(GAMMA * ts) * (((GAMMA * (1+1j)) ** 0) * numpy.cos(theta) * numpy.exp(1j * GAMMA * ts) + ((GAMMA * (1-1j)) ** 0) * numpy.sin(theta) * numpy.exp(1j * (phi - GAMMA * ts)))
-	# # As = numpy.cos(theta) * numpy.exp(1j * ts) + numpy.sin(theta) * numpy.exp(1j * (phi - ts))
+	# # First order.
+	# n1 = GAMMA * numpy.cos(theta)
+	# n2 = GAMMA * numpy.sin(theta) * numpy.exp(1j * phi)
+	# As = eta * numpy.exp(GAMMA * ts) * (n1 * numpy.exp(1j * GAMMA * ts) + n2 * numpy.exp(-1j * GAMMA * ts))
 	# ax1.plot(ts, numpy.vectorize(abs)(As), 'r')
 	# ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'r')
+
+	# # Second order.
+	# As = As + (numpy.exp(3 * GAMMA * ts) * (-n1**2 * n2.conj() * numpy.exp(3j * GAMMA * ts) + (1-3j) * (abs(n1)**2 + 2*abs(n2)**2) * n1 * numpy.exp(1j * GAMMA * ts) + (1+3j) * (abs(n2)**2 + 2*abs(n1)**2) * n2 * numpy.exp(-1j * GAMMA * ts) - n2**2 * n1.conj() * numpy.exp(-3j * GAMMA * ts))) / (320 * GAMMA**4)
+	# ax1.plot(ts, numpy.vectorize(abs)(As), 'b')
+	# ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'b')
 
 	ax1.set_yscale("log")
 	ax1.set_axisbelow(True)
