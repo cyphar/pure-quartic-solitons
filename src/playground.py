@@ -15,8 +15,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import math
+import sys
 import cmath
-
+import csv
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
@@ -44,6 +45,15 @@ def latexify(ax):
 		axis.set_tick_params(direction="out", color=SPINE_COLOR)
 
 	return ax
+
+def csv_column_write(f, cols, fieldnames):
+	import csv
+
+	writer = csv.DictWriter(f, fieldnames=fieldnames)
+	writer.writeheader()
+
+	for fields in zip(*cols):
+		writer.writerow({fieldnames[i]: field for i, field in enumerate(fields)})
 
 # The key equation (from the paper):
 # \frac{\partial A}{\partial z} =
@@ -135,6 +145,7 @@ def soliton(t, y):
 def solve(t0, t1, dt, start):
 	solver = scipy.integrate.ode(soliton)
 	solver.set_integrator("dop853", nsteps=2000)
+	# solver.set_integrator("vode", method="adams", nsteps=2000, max_step=dt)
 	solver.set_initial_value(start, t0)
 
 	As = []
@@ -145,91 +156,157 @@ def solve(t0, t1, dt, start):
 	ts, As = numpy.array(As).T
 	return ts, As
 
+def metric(ts, As, eta, theta, phi):
+	mid = middle(eta, theta, phi)
+	Is = numpy.vectorize(abs)(As)
+
+	# Cut down time domain so that we don't detect minima before the estimate.
+	filt = ts >= mid
+	ts = ts[filt]
+	Is = Is[filt]
+
+	# Get lowest dip value.
+	i_dip = numpy.argmin(Is)
+	t_dip = ts[i_dip]
+	I_dip = Is[i_dip]
+
+	# Get highest peak value that happened after mid but before the dip.
+	filt = ts < t_dip
+	# ts = ts[filt]
+	Is = Is[filt]
+
+	if not Is.shape[0]:
+		return None
+
+	# TODO: Handle cases where the maximum is before the peak.
+	I_peak = numpy.amax(Is)
+
+	return (I_peak - I_dip) / I_peak
+
 def main():
-	dt = 0.005
+	dt = 0.01
+	last = 8
 
 	fig = plt.figure(figsize=(10, 10), dpi=80)
 	ax1 = latexify(fig.add_subplot("211"))
 	ax2 = latexify(fig.add_subplot("212"))
 
-	num = 500
-	thetaspace = numpy.linspace(0, 2*math.pi, num=num)
-	# phispace = numpy.linspace(0, math.pi, num=num)
-	phispace = numpy.logspace(1e-20, math.log10(2*math.pi), num=num)
-	etaspace = 1e-14 * numpy.exp(numpy.linspace(0, 2*math.pi, num=num))
+	num = 100
+	thetaspace = numpy.linspace(0, math.pi, num=num)
+	etaspace = 1e-10 * numpy.exp(numpy.linspace(0, math.pi, num=num))
+	num = 300
+	phispace = numpy.linspace(0, math.pi, num=num)
 
-	theta = numpy.random.choice(thetaspace)
-	phi = numpy.random.choice(phispace)
-	eta = numpy.random.choice(etaspace)
+	# theta = numpy.random.choice(thetaspace)
+	# phi = numpy.random.choice(phispace)
+	# eta = numpy.random.choice(etaspace)
 
 	# theta=0.778564516011
 	# eta=1.71455095837e-14
 	# phi=0.0980274935414
 
-	theta = 3.94812014051
-	eta = 2.43519024939e-12
-	phi = 0.465630594321
+	# theta = 3.94812014051
+	# eta = 2.43519024939e-12
+	# phi = 0.465630594321
+
+	out = "results-%d.csv" % (random.randint(0, 999999),)
+	print(out)
 
 	# TODO: Vectorise
-	# for theta in thetaspace:
-	for phi in phispace:
-	# for eta in etaspace:
-		t0 = 0
-		t1 = 2*middle(eta, theta, phi)
+	with open(out, "w") as f:
+		writer = csv.DictWriter(f, fieldnames=["eta", "theta", "phi", "metric"])
+		writer.writeheader()
+		f.flush()
 
-		start = init(t0, eta, theta, phi)
-		# print(".")
-		ts, As = solve(t0, t1, dt, start)
-		ax1.plot(ts, numpy.vectorize(abs)(As))
-		ax2.plot(ts, numpy.vectorize(cmath.phase)(As))
+		for eta in etaspace:
+			for theta in thetaspace:
+				# Find the metric for phi given (eta, theta).
+				values = []
+				for phi in phispace:
+					t0 = 0
+					t1 = 2*middle(eta, theta, phi)
 
-	t0 = 0
-	mid = middle(eta, theta, phi)
-	t1 = 2*mid
+					start = init(t0, eta, theta, phi)
+					sys.stdout.write(".")
+					sys.stdout.flush()
+					ts, As = solve(t0, t1, dt, start)
 
-	start = init(t0, eta, theta, phi)
-	ts, As = solve(t0, t1, dt, start)
+					met = metric(ts, As, eta, theta, phi)
+					if met is not None:
+						values.append((met, phi))
 
-	# now plot theoretical
-	ax1.set_title(r"{$\theta = %s, \eta = %s, \phi = %s$}" % (theta, eta, phi))
+				# Get best metric value.
+				if values:
+					values = numpy.array(values)
+					values = values[numpy.lexsort((values[:,0],))]
+				else:
+					values = [(0, 0)]
 
-	# plot integration
-	ax1.plot(ts, numpy.vectorize(abs)(As), 'k')
-	ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'k')
+				# Write the best one.
+				best = values[-1]
+				print('eta=%s,theta=%s => ' % (eta, theta), best)
+				writer.writerow({"eta": eta, "theta": theta, "phi": best[1], "metric": best[0]})
+				f.flush()
 
-	# # First order.
-	# n1 = GAMMA * numpy.cos(theta)
-	# n2 = GAMMA * numpy.sin(theta) * numpy.exp(1j * phi)
-	# As = eta * numpy.exp(GAMMA * ts) * (n1 * numpy.exp(1j * GAMMA * ts) + n2 * numpy.exp(-1j * GAMMA * ts))
-	# ax1.plot(ts, numpy.vectorize(abs)(As), 'r')
-	# ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'r')
+	# print("phi", values[:,1])
 
-	# # Second order.
-	# As = As + (numpy.exp(3 * GAMMA * ts) * (-n1**2 * n2.conj() * numpy.exp(3j * GAMMA * ts) + (1-3j) * (abs(n1)**2 + 2*abs(n2)**2) * n1 * numpy.exp(1j * GAMMA * ts) + (1+3j) * (abs(n2)**2 + 2*abs(n1)**2) * n2 * numpy.exp(-1j * GAMMA * ts) - n2**2 * n1.conj() * numpy.exp(-3j * GAMMA * ts))) / (320 * GAMMA**4)
-	# ax1.plot(ts, numpy.vectorize(abs)(As), 'b')
-	# ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'b')
+	# for phi in values[:,1]:
+		# t0 = 0
+		# t1 = 2*middle(eta, theta, phi)
 
-	ax1.set_yscale("log")
-	ax1.set_axisbelow(True)
-	ax1.set_xlabel(r"Time ($\tau$)")
-	ax1.set_ylabel(r"Amplitude ($|A|$)")
-	ax1.set_xlim([t0, t1])
+		# start = init(t0, eta, theta, phi)
+		# # print(".")
+		# ts, As = solve(t0, t1, dt, start)
+		# ax1.plot(ts, numpy.vectorize(abs)(As))
+		# ax2.plot(ts, numpy.vectorize(cmath.phase)(As))
 
-	ax1.xaxis.set_ticks([mid], minor=True)
-	ax1.xaxis.grid(True, which="minor", color="k", linestyle=":")
-	ax2.xaxis.set_ticks([mid], minor=True)
-	ax2.xaxis.grid(True, which="minor", color="k", linestyle=":")
+	# t0 = 0
+	# mid = middle(eta, theta, phi)
+	# t1 = 2*mid
 
-	ax2.set_axisbelow(True)
-	ax2.set_xlabel(r"Time ($\tau$)")
-	ax2.set_ylabel(r"Phase")
-	ax2.set_xlim([t0, t1])
-	ax2.set_ylim([-math.pi, math.pi])
+	# start = init(t0, eta, theta, phi)
+	# ts, As = solve(t0, t1, dt, start)
 
-	plt.legend()
-	fig.tight_layout()
+	# # now plot theoretical
+	# ax1.set_title(r"{$\theta = %s, \eta = %s, \phi = %s$}" % (theta, eta, phi))
 
-	plt.show()
+	# # plot integration
+	# ax1.plot(ts, numpy.vectorize(abs)(As), 'k')
+	# ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'k')
+
+	# # # First order.
+	# # n1 = GAMMA * numpy.cos(theta)
+	# # n2 = GAMMA * numpy.sin(theta) * numpy.exp(1j * phi)
+	# # As = eta * numpy.exp(GAMMA * ts) * (n1 * numpy.exp(1j * GAMMA * ts) + n2 * numpy.exp(-1j * GAMMA * ts))
+	# # ax1.plot(ts, numpy.vectorize(abs)(As), 'r')
+	# # ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'r')
+
+	# # # Second order.
+	# # As = As + (numpy.exp(3 * GAMMA * ts) * (-n1**2 * n2.conj() * numpy.exp(3j * GAMMA * ts) + (1-3j) * (abs(n1)**2 + 2*abs(n2)**2) * n1 * numpy.exp(1j * GAMMA * ts) + (1+3j) * (abs(n2)**2 + 2*abs(n1)**2) * n2 * numpy.exp(-1j * GAMMA * ts) - n2**2 * n1.conj() * numpy.exp(-3j * GAMMA * ts))) / (320 * GAMMA**4)
+	# # ax1.plot(ts, numpy.vectorize(abs)(As), 'b')
+	# # ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'b')
+
+	# ax1.set_yscale("log")
+	# ax1.set_axisbelow(True)
+	# ax1.set_xlabel(r"Time ($\tau$)")
+	# ax1.set_ylabel(r"Amplitude ($|A|$)")
+	# ax1.set_xlim([t0, t1])
+
+	# ax1.xaxis.set_ticks([mid], minor=True)
+	# ax1.xaxis.grid(True, which="minor", color="k", linestyle=":")
+	# ax2.xaxis.set_ticks([mid], minor=True)
+	# ax2.xaxis.grid(True, which="minor", color="k", linestyle=":")
+
+	# ax2.set_axisbelow(True)
+	# ax2.set_xlabel(r"Time ($\tau$)")
+	# ax2.set_ylabel(r"Phase")
+	# ax2.set_xlim([t0, t1])
+	# ax2.set_ylim([-math.pi, math.pi])
+
+	# plt.legend()
+	# fig.tight_layout()
+
+	# plt.show()
 	# plt.savefig(out)
 	# print(out)
 
