@@ -19,6 +19,7 @@ import csv
 import sys
 import math
 import numpy
+import argparse
 
 import matplotlib
 import matplotlib.colors
@@ -112,19 +113,15 @@ def plot_shoebox(ax, fname, metric="metric"):
 
 	return pcm
 
-def main():
-	if len(sys.argv) != 2:
-		print("usage: shoebox.py <file.csv>")
-		os.exit(1)
-
-	print("plotting %s!" % (sys.argv[1]))
+def main(config):
+	print("plotting %s!" % (config.file,))
 
 	fig = plt.figure(figsize=(10, 10), dpi=80)
 	ax1 = latexify(fig.add_subplot("211"))
 	ax2 = latexify(fig.add_subplot("212"))
 
-	pcm1 = plot_shoebox(ax1, sys.argv[1], metric="metric")
-	pcm2 = plot_shoebox(ax2, sys.argv[1], metric="phi")
+	pcm1 = plot_shoebox(ax1, config.file[0], metric=config.metric)
+	pcm2 = plot_shoebox(ax2, config.file[0], metric=config.metric+"_phi")
 
 	fig.colorbar(pcm1, ax=ax1)
 	fig.colorbar(pcm2, ax=ax2)
@@ -133,4 +130,14 @@ def main():
 	fig.tight_layout()
 	plt.show()
 
-main()
+if __name__ == "__main__":
+	def __wrapped_main__():
+		parser = argparse.ArgumentParser(description="Plots the shape of the parameter space (eta, theta, phi) with the colour being set by the given metric value.")
+		# metric arguments
+		parser.add_argument("-m", "--metric", dest="metric", type=str, default="depth", help="Metric to plot from {depth, linear} (default: [depth]).")
+		parser.add_argument("file", nargs=1)
+
+		config = parser.parse_args()
+		main(config)
+
+	__wrapped_main__()
