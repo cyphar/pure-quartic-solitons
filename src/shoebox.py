@@ -114,7 +114,7 @@ def plot_shoebox(ax, fname, metric="metric"):
 	return pcm
 
 def main(config):
-	print("plotting %s!" % (config.file,))
+	print("PLOT :: %s [metric=%s]" % (config.file, config.metric))
 
 	fig = plt.figure(figsize=(10, 10), dpi=80)
 	ax1 = latexify(fig.add_subplot("211"))
