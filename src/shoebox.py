@@ -25,6 +25,7 @@ import matplotlib
 import matplotlib.colors
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+import cmocean
 
 def positions(ndarray):
 	return zip(*numpy.where(numpy.ones_like(ndarray)))
@@ -101,9 +102,13 @@ def plot_shoebox(ax, fname, metric="metric"):
 		except ValueError:
 			continue
 
+	# Use phase for phase "metric".
+	cmap = "PuBu_r"
+	if "phi" in metric:
+		cmap = cmocean.cm.phase
+
 	# Plot all the things.
-	# ax.pcolor(x, y, z, cmap='viridis', vmin=z.min(), vmax=z.max())
-	pcm = ax.pcolor(x, y, z, cmap='PuBu_r', vmin=z.min(), vmax=z.max())
+	pcm = ax.pcolor(x, y, z, cmap=cmap, vmin=z.min(), vmax=z.max())
 	ax.set_xlim([x.min(), x.max()])
 	ax.set_xlabel(r"$\theta$")
 	ax.set_ylim([y.max(), y.min()])
