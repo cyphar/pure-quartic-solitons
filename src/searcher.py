@@ -228,19 +228,36 @@ def main(config):
 		except OSError:
 			print("FAIL :: failed to create directory")
 
-	# Get sample space.
-	etaspace = 1e-10 * numpy.exp(numpy.linspace(0, math.pi, num=config.eta_samples))
-	thetaspace = numpy.linspace(0, math.pi, num=config.theta_samples)
-	phispace = numpy.linspace(0, 2*math.pi, num=config.phi_samples)
-	print("ETA   :: 1e-10 * [0,math.pi] <- %s" % (config.eta_samples,))
-	print("THETA :: [0,math.pi]         <- %s" % (config.theta_samples,))
-	print("PHI   :: [0,2*math.pi]       <- %s" % (config.phi_samples,))
+	# Convert *_space limits to something sane.
+	etaspace = numpy.array([])
+	for etas in config.eta_space:
+		low, high = eval(etas)
+		space = numpy.linspace(low, high, num=config.eta_samples)
+		etaspace = numpy.concatenate((etaspace, space))
+	thetaspace = numpy.array([])
+	for thetas in config.theta_space:
+		low, high = eval(thetas)
+		space = numpy.linspace(low, high, num=config.theta_samples)
+		thetaspace = numpy.concatenate((thetaspace, space))
+	phispace = numpy.array([])
+	for phis in config.phi_space:
+		low, high = eval(phis)
+		space = numpy.linspace(low, high, num=config.phi_samples)
+		phispace = numpy.concatenate((phispace, space))
+
+	print("ETA   :: %s <- %s" % (config.eta_space, config.eta_samples))
+	print("THETA :: %s <- %s" % (config.theta_space, config.theta_samples))
+	print("PHI   :: %s <- %s" % (config.phi_space, config.phi_samples))
 
 	# Partition space according to the arguments.Samples. Only partition one of
 	# these dimensions, for obvious reasons.
 	etaspace = numpy.array_split(etaspace, config.partitions)[config.index]
 	# thetaspace = numpy.array_split(thetaspace, config.partitions)[config.index]
 	# phispace = numpy.array_split(phispace, config.partitions)[config.index]
+
+	# Nothing is assigned to us (shame).
+	if not etaspace.shape[0]:
+		return
 
 	# Result output.
 	if config.out_results:
@@ -330,12 +347,24 @@ if __name__ == "__main__":
 		# output arguments
 		parser.add_argument("-s", "--save-directory", dest="out_directory", type=str, default=None, help="Output directory for integration data (default: none).")
 		parser.add_argument("-o", "--save-results", dest="out_results", type=str, default=None, help="Output path for search results (default: random).")
+		# shoebox arguments
+		parser.add_argument("-eS", "--eta-space", dest="eta_space", action="append", default=[], help="Limits of eta-space shoebox. (default: (1e-10,1e-10*math.exp(math.pi))).")
+		parser.add_argument("-tS", "--theta-space", dest="theta_space", action="append", default=[], help="Limits of theta-space shoebox. (default: (0,math.pi)).")
+		parser.add_argument("-pS", "--phi-space", dest="phi_space", action="append", default=[], help="Limits of phi-space shoebox. (default: (0,2*math.pi)).")
 		# sampling arguments
 		parser.add_argument("-es", "--eta-samples", dest="eta_samples", type=int, default=100, help="Number of samples taken in eta-space. (default: 100).")
 		parser.add_argument("-ts", "--theta-samples", dest="theta_samples", type=int, default=100, help="Number of samples taken in theta-space. (default: 100).")
 		parser.add_argument("-ps", "--phi-samples", dest="phi_samples", type=int, default=500, help="Number of samples taken in phi-space. (default: 500).")
 
 		config = parser.parse_args()
+
+		if not config.eta_space:
+			config.eta_space = ["(1e-10,1e-10*math.exp(math.pi))"]
+		if not config.theta_space:
+			config.theta_space = ["(0,math.pi)"]
+		if not config.phi_space:
+			config.phi_space = ["(0,2*math.pi)"]
+
 		main(config)
 
 	__wrapped_main__()

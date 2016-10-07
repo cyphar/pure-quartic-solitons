@@ -54,4 +54,4 @@ echo "OUTPUT :: $PREFIX.index.csv"
 	for i in {1..${NUM_PARTITIONS}}; do
 		echo $((${i}-1))
 	done
-) | parallel ./src/searcher.py --num-partitions ${NUM_PARTITIONS} -i {} -o ${PREFIX}.{}.csv $*
+) | parallel -q ./src/searcher.py --num-partitions ${NUM_PARTITIONS} -i {} -o ${PREFIX}.{}.csv $*
