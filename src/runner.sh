@@ -15,20 +15,23 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 usage() {
-	echo "usage: $0 -p NUM_PARTITIONS -- [arguments]" >&2
+	echo "usage: $0 -p NUM_PARTITIONS [-o OUTDIR] [-P PREFIX] -- [arguments]" >&2
 	exit 1
 }
 
 # Get -p flag.
 export NUM_PARTITIONS=0
 export OUTDIR="."
-while getopts ":p:o:" o; do
+while getopts ":p:o:P:" o; do
 	case "${o}" in
 		p)
 			NUM_PARTITIONS="${OPTARG}"
 			;;
 		o)
 			OUTDIR="${OPTARG}"
+			;;
+		P)
+			PREFIX="${OPTARG}"
 			;;
 		*)
 			usage
@@ -44,9 +47,13 @@ fi
 # Get other arguments.
 shift ${OPTIND}-1
 
-
 mkdir -p "${OUTDIR}"
-PREFIX="${OUTDIR}/results_$RANDOM"
+
+if [ -z "${PREFIX}" ]; then
+	PREFIX="${OUTDIR}/results_$RANDOM"
+else
+	PREFIX="${OUTDIR}/${PREFIX}"
+fi
 echo "OUTPUT :: $PREFIX.index.csv"
 
 # Thanks GNU parallel!

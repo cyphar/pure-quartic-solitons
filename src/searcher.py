@@ -58,6 +58,25 @@ def csv_column_write(f, cols, fieldnames):
 	for fields in zip(*cols):
 		writer.writerow({fieldnames[i]: field for i, field in enumerate(fields)})
 
+def csv_column_read(f, fieldnames, casts=None, start=None, end=None, reset=False):
+	if casts is None or len(fieldnames) != len(casts):
+		casts = [object] * len(fieldnames)
+
+	def parse_row(row):
+		row = {k: v for k, v in row.items() if k in fieldnames}
+		return [row[key] for key in sorted(row.keys(), key=lambda k: fieldnames.index(k))]
+
+	if reset:
+		pos = f.tell()
+
+	reader = csv.DictReader(f)
+	rows = [[cast(field) for cast, field in zip(casts, fields)] for fields in (parse_row(row) for row in reader if row)]
+
+	if reset:
+		f.seek(pos)
+
+	return [numpy.array(col[start:end], dtype=cast) for cast, col in zip(casts, zip(*rows))]
+
 # The key equation (from the paper):
 # \frac{\partial A}{\partial z} =
 #         i \frac{\beta_4}{24} \frac{\partial^4 A}{\partial t^4} +
@@ -266,6 +285,26 @@ def main(config):
 		out = "results-%d.csv" % (random.randint(0, 999999),)
 	print("OUTPUT :: %s" % (out,))
 
+	partial = set()
+	if os.path.isfile(out):
+		with open(out, "r") as resf:
+			# First figure out the metrics.
+			header = resf.readline().strip()
+			new_metrics = [m[:-len("_phi")] for m in header.split(',') if m.endswith("_phi")]
+
+			# Warn the user.
+			if new_metrics != config.metrics:
+				print("METRICS :: updated to match old file")
+			config.metrics = new_metrics
+
+			# Reset.
+			resf.seek(0)
+
+			# Get what has already been computed. We use strings because
+			# floating point comparison is bad.
+			part_etas, part_thetas = csv_column_read(resf, ["eta", "theta"], [str, str])
+			partial = {(eta, theta) for eta, theta in numpy.array([part_etas, part_thetas]).T}
+
 	# Get the set of metrics requested.
 	metrics = [METRICS[m] for m in config.metrics]
 	print("METRICS :: %s (%d)" % (config.metrics, len(metrics)))
@@ -273,11 +312,21 @@ def main(config):
 	# TODO: Vectorise
 	with open(out, "a") as f:
 		writer = csv.DictWriter(f, fieldnames=["eta", "theta"] + config.metrics + [m+"_phi" for m in config.metrics])
-		writer.writeheader()
+
+		# Don't write the header if we already have partial.
+		if not partial:
+			writer.writeheader()
+		else:
+			f.write('\n')
 		f.flush()
 
 		for eta in etaspace:
 			for theta in thetaspace:
+				# Skip if already existed in partial results file.
+				if (str(eta), str(theta)) in partial:
+					print("!! %s", (eta, theta))
+					continue
+
 				# Find the metrics for phi given (eta, theta).
 				values = []
 				for _ in enumerate(metrics):
@@ -288,20 +337,37 @@ def main(config):
 					t0 = 0
 					t1 = 2*middle(eta, theta, phi)
 
-					start = init(t0, eta, theta, phi)
-					sys.stdout.write(".")
-					sys.stdout.flush()
-					ts, As = solve(t0, t1, config.dt, start)
-
-					# Save the intermediate integration steps.
+					path = ""
 					if config.out_directory:
 						path = "%s/eta:%s/theta:%s/phi:%s.csv" % (config.out_directory, eta, theta, phi)
-						try:
-							os.makedirs(os.path.dirname(path))
-						except FileExistsError:
-							pass
-						with open(path, "w") as intf:
-							csv_column_write(intf, [ts, As], ["t", "A"])
+
+					ts = As = None
+					if path and os.path.isfile(path):
+						sys.stdout.write("*")
+						sys.stdout.flush()
+						with open(path, "r") as intf:
+							try:
+								ts, As = csv_column_read(intf, ["t", "A"], [complex, complex])
+							except ValueError:
+								# There was some issue with the formatting of
+								# the output -- just redo the integration.
+								ts = As = None
+
+					if (ts is None) or (As is None):
+						start = init(t0, eta, theta, phi)
+						sys.stdout.write(".")
+						sys.stdout.flush()
+						ts, As = solve(t0, t1, config.dt, start)
+
+						# Save the intermediate integration steps.
+						if config.out_directory:
+							path = "%s/eta:%s/theta:%s/phi:%s.csv" % (config.out_directory, eta, theta, phi)
+							try:
+								os.makedirs(os.path.dirname(path))
+							except FileExistsError:
+								pass
+							with open(path, "w") as intf:
+								csv_column_write(intf, [ts, As], ["t", "A"])
 
 					# Compute the metrics.
 					for idx, m in enumerate(metrics):
