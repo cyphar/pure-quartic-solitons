@@ -22,8 +22,9 @@ import numpy
 import argparse
 
 import matplotlib
-import matplotlib.colors
 matplotlib.use("TkAgg")
+import matplotlib.colors
+import matplotlib.ticker
 import matplotlib.pyplot as plt
 import cmocean
 
@@ -103,13 +104,18 @@ def plot_shoebox(ax, fname, metric="metric"):
 			continue
 
 	# Use phase for phase "metric".
-	cmap = "PuBu_r"
 	if "phi" in metric:
 		cmap = cmocean.cm.phase
+	else:
+		cmap = "viridis"
 
 	# Plot all the things.
 	pcm = ax.pcolor(x, y, z, cmap=cmap, vmin=z.min(), vmax=z.max())
-	ax.set_xlim([x.min(), x.max()])
+	ticks = numpy.linspace(0, 1, num=5)
+	ax.set_xticks([x*math.pi for x in ticks])
+	ax.xaxis.set_major_formatter(matplotlib.ticker.FixedFormatter([r"$%s \pi$" % (x,) for x in ticks]))
+
+	ax.set_xlim([0, math.pi])
 	ax.set_xlabel(r"$\theta$")
 	ax.set_ylim([y.max(), y.min()])
 	ax.set_ylabel(r"$\eta$")
@@ -127,9 +133,13 @@ def main(config):
 
 	pcm1 = plot_shoebox(ax1, config.file[0], metric=config.metric)
 	pcm2 = plot_shoebox(ax2, config.file[0], metric=config.metric+"_phi")
+	# pcm1 = plot_shoebox(ax1, config.file[0], metric="linear")
+	# pcm2 = plot_shoebox(ax2, config.file[0], metric="depth")
 
 	fig.colorbar(pcm1, ax=ax1)
-	fig.colorbar(pcm2, ax=ax2)
+	ticks = numpy.linspace(0, 2, num=9)
+	cbar = fig.colorbar(pcm2, ax=ax2, ticks=[x*math.pi for x in ticks])
+	cbar.ax.set_yticklabels([r"$%s \pi$" % (x,) for x in ticks])
 
 	# plt.legend()
 	fig.tight_layout()
