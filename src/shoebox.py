@@ -80,7 +80,7 @@ def read_shoebox(fname, metric):
 	with open(fname) as f:
 		return csv_column_read(f, ["eta", "theta", metric], casts=[float, float, float])
 
-def plot_shoebox(ax, fname, metric="metric"):
+def plot_shoebox(config, ax, fname, metric="metric"):
 	# Get the columns.
 	etas, thetas, metrics = read_shoebox(fname, metric=metric)
 
@@ -108,41 +108,59 @@ def plot_shoebox(ax, fname, metric="metric"):
 		cmap = cmocean.cm.phase
 	else:
 		cmap = "viridis"
+		# z[z > 0] = numpy.log(z[z > 0])
 
 	# Plot all the things.
 	pcm = ax.pcolor(x, y, z, cmap=cmap, vmin=z.min(), vmax=z.max())
-	ticks = numpy.linspace(0, 1, num=5)
-	ax.set_xticks([x*math.pi for x in ticks])
-	ax.xaxis.set_major_formatter(matplotlib.ticker.FixedFormatter([r"$%s \pi$" % (x,) for x in ticks]))
+	if config.angle_ticks:
+		ticks = numpy.linspace(0, 1, num=5)
+		ax.set_xticks([x*math.pi for x in ticks])
+		ax.xaxis.set_major_formatter(matplotlib.ticker.FixedFormatter([r"$%s \pi$" % (x,) for x in ticks]))
 
-	ax.set_xlim([0, math.pi])
-	ax.set_xlabel(r"$\theta$")
-	ax.set_ylim([y.max(), y.min()])
-	ax.set_ylabel(r"$\eta$")
+	ax.set_xlim(eval(config.theta_space))
+	ax.set_ylim(eval(config.eta_space))
 
-	ax.set_title("Shoebox [metric=%s]" % (metric,))
+	# ax.set_title("Shoebox [metric=%s]" % (metric,))
 
 	return pcm
 
 def main(config):
 	print("PLOT :: %s [metric=%s]" % (config.file, config.metric))
 
-	fig = plt.figure(figsize=(10, 10), dpi=80)
-	ax1 = latexify(fig.add_subplot("211"))
-	ax2 = latexify(fig.add_subplot("212"))
+	size = len(config.theta_space)
+	theta_space = config.theta_space
+	config.eta_space = config.eta_space[0]
 
-	pcm1 = plot_shoebox(ax1, config.file[0], metric=config.metric)
-	pcm2 = plot_shoebox(ax2, config.file[0], metric=config.metric+"_phi")
-	# pcm1 = plot_shoebox(ax1, config.file[0], metric="linear")
-	# pcm2 = plot_shoebox(ax2, config.file[0], metric="depth")
+	f, plots = plt.subplots(2, size, sharex='col', sharey='row')
 
-	fig.colorbar(pcm1, ax=ax1)
-	ticks = numpy.linspace(0, 2, num=9)
-	cbar = fig.colorbar(pcm2, ax=ax2, ticks=[x*math.pi for x in ticks])
-	cbar.ax.set_yticklabels([r"$%s \pi$" % (x,) for x in ticks])
+	if len(plots.shape) == 1:
+		plots = numpy.array([plots]).T
+
+	for idx, (ax1, ax2) in enumerate(plots.T):
+		ax1 = latexify(ax1)
+		ax2 = latexify(ax2)
+
+		config.theta_space = theta_space[idx]
+		print(config.theta_space)
+		pcm1 = plot_shoebox(config, ax1, config.file[0], metric=config.metric)
+		pcm2 = plot_shoebox(config, ax2, config.file[0], metric=config.metric+"_phi")
+		# pcm1 = plot_shoebox(ax1, config.file[0], metric="linear")
+		# pcm2 = plot_shoebox(ax2, config.file[0], metric="depth")
+
+		f.colorbar(pcm1, ax=ax1)
+		if config.angle_ticks:
+			ticks = numpy.linspace(0, 2, num=9)
+			cbar = f.colorbar(pcm2, ax=ax2, ticks=[x*math.pi for x in ticks])
+			cbar.ax.set_yticklabels([r"$%s \pi$" % (x,) for x in ticks])
+		else:
+			cbar = f.colorbar(pcm2, ax=ax2)
+
+		ax1.set_ylabel(r"$\eta$")
+		ax2.set_xlabel(r"$\theta$")
 
 	# plt.legend()
-	fig.tight_layout()
+	f.subplots_adjust(hspace=-0.2)
+	f.tight_layout()
 	plt.show()
 
 if __name__ == "__main__":
@@ -150,9 +168,23 @@ if __name__ == "__main__":
 		parser = argparse.ArgumentParser(description="Plots the shape of the parameter space (eta, theta, phi) with the colour being set by the given metric value.")
 		# metric arguments
 		parser.add_argument("-m", "--metric", dest="metric", type=str, default="depth", help="Metric to plot from {depth, linear} (default: [depth]).")
+		# plotting arguments
+		parser.add_argument("-a", "--angle-ticks", dest="angle_ticks", action="store_const", const=True, default=True, help="Use angle ticks (have multiples of pi when plotting angles) (default).")
+		parser.add_argument("--no-angle-ticks", dest="angle_ticks", action="store_const", const=False, default=True, help="Do not use angle ticks.")
+		# shoebox arguments
+		parser.add_argument("-eS", "--eta-space", dest="eta_space", action="append", default=[], help="Limits of eta-space shoebox. (default: (1e-10,1e-10*math.exp(math.pi))).")
+		parser.add_argument("-tS", "--theta-space", dest="theta_space", action="append", default=[], help="Limits of theta-space shoebox. (default: (0,math.pi)).")
 		parser.add_argument("file", nargs=1)
 
 		config = parser.parse_args()
+		if not config.eta_space:
+			config.eta_space = ["(1e-10,1e-10*math.exp(math.pi))"]
+		if not config.theta_space:
+			config.theta_space = ["(0,math.pi)"]
+
+		if len(config.eta_space) > 1:
+			raise NotImplementedError("eta_space multi-range not implemented")
+
 		main(config)
 
 	__wrapped_main__()
