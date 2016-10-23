@@ -28,6 +28,19 @@ import matplotlib.ticker
 import matplotlib.pyplot as plt
 import cmocean
 
+matplotlib.rcParams.update({
+	"backend": "ps",
+	"text.usetex": True,
+	"text.latex.preamble": [r"\usepackage[dvips]{graphicx}"],
+	"axes.labelsize": 13, # fontsize for x and y labels (was 10)
+	"axes.titlesize": 13,
+	"font.size": 13, # was 10
+	"legend.fontsize": 13, # was 10
+	"xtick.labelsize": 13,
+	"ytick.labelsize": 13,
+	"font.family": "serif", # ???
+})
+
 def positions(ndarray):
 	return zip(*numpy.where(numpy.ones_like(ndarray)))
 
@@ -131,44 +144,64 @@ def main(config):
 	theta_space = config.theta_space
 	config.eta_space = config.eta_space[0]
 
-	f, plots = plt.subplots(2, size, sharex='col', sharey='row')
+	f, plots = plt.subplots(1 + config.best_phi, size, figsize=(5, 5), dpi=80, sharex='col', sharey='row')
+
+	if numpy.array([plots]).shape == (1,):
+		plots = numpy.array([plots])
 
 	if len(plots.shape) == 1:
 		plots = numpy.array([plots]).T
 
-	for idx, (ax1, ax2) in enumerate(plots.T):
-		ax1 = latexify(ax1)
-		ax2 = latexify(ax2)
+	for idx, axes in enumerate(plots.T):
+		ax1 = ax2 = None
+		if len(axes) >= 1:
+			ax1 = latexify(axes[0])
+		if len(axes) >= 2:
+			ax2 = latexify(axes[1])
 
 		config.theta_space = theta_space[idx]
 		print(config.theta_space)
-		pcm1 = plot_shoebox(config, ax1, config.file[0], metric=config.metric)
-		pcm2 = plot_shoebox(config, ax2, config.file[0], metric=config.metric+"_phi")
-		# pcm1 = plot_shoebox(ax1, config.file[0], metric="linear")
-		# pcm2 = plot_shoebox(ax2, config.file[0], metric="depth")
+		if ax1 is not None:
+			pcm1 = plot_shoebox(config, ax1, config.file[0], metric=config.metric)
+		if ax2 is not None:
+			pcm2 = plot_shoebox(config, ax2, config.file[0], metric=config.metric+"_phi")
 
-		f.colorbar(pcm1, ax=ax1)
-		if config.angle_ticks:
-			ticks = numpy.linspace(0, 2, num=9)
-			cbar = f.colorbar(pcm2, ax=ax2, ticks=[x*math.pi for x in ticks])
-			cbar.ax.set_yticklabels([r"$%s \pi$" % (x,) for x in ticks])
-		else:
-			cbar = f.colorbar(pcm2, ax=ax2)
+		if ax1 is not None:
+			f.colorbar(pcm1, ax=ax1)
+		if ax2 is not None:
+			if config.angle_ticks:
+				ticks = numpy.linspace(0, 2, num=9)
+				cbar = f.colorbar(pcm2, ax=ax2, ticks=[x*math.pi for x in ticks])
+				cbar.ax.set_yticklabels([r"$%s \pi$" % (x,) for x in ticks])
+			else:
+				cbar = f.colorbar(pcm2, ax=ax2)
 
-		ax1.set_ylabel(r"$\eta$")
-		ax2.set_xlabel(r"$\theta$")
+		if ax1 is not None:
+			ax1.set_ylabel(r"$\eta$")
+			if ax1 is None:
+				ax1.set_xlabel(r"$\theta$")
+		if ax2 is not None:
+			ax2.set_xlabel(r"$\theta$")
 
 	# plt.legend()
 	f.subplots_adjust(hspace=-0.2)
 	f.tight_layout()
-	plt.show()
+
+	if config.out:
+		plt.savefig(config.out)
+	else:
+		plt.show()
 
 if __name__ == "__main__":
 	def __wrapped_main__():
 		parser = argparse.ArgumentParser(description="Plots the shape of the parameter space (eta, theta, phi) with the colour being set by the given metric value.")
+		# save argument
+		parser.add_argument("--out", dest="out", type=str, default=None, help="Output to given filename rather than displaying in an interactive window (default: disabled)")
 		# metric arguments
 		parser.add_argument("-m", "--metric", dest="metric", type=str, default="depth", help="Metric to plot from {depth, linear} (default: [depth]).")
 		# plotting arguments
+		parser.add_argument("-sp", "--show-best-phi", dest="best_phi", action="store_const", const=True, default=False, help="Show best phi plot.")
+		parser.add_argument("--no-show-best-phi", dest="best_phi", action="store_const", const=False, default=False, help="Do not show best phi plot. (default)")
 		parser.add_argument("-a", "--angle-ticks", dest="angle_ticks", action="store_const", const=True, default=True, help="Use angle ticks (have multiples of pi when plotting angles) (default).")
 		parser.add_argument("--no-angle-ticks", dest="angle_ticks", action="store_const", const=False, default=True, help="Do not use angle ticks.")
 		# shoebox arguments

@@ -31,6 +31,19 @@ import numpy.random
 import scipy
 import scipy.integrate
 
+matplotlib.rcParams.update({
+	"backend": "ps",
+	"text.usetex": True,
+	"text.latex.preamble": [r"\usepackage[dvips]{graphicx}"],
+	"axes.labelsize": 13, # fontsize for x and y labels (was 10)
+	"axes.titlesize": 13,
+	"font.size": 13, # was 10
+	"legend.fontsize": 13, # was 10
+	"xtick.labelsize": 13,
+	"ytick.labelsize": 13,
+	"font.family": "serif", # ???
+})
+
 SPINE_COLOR = "black"
 
 def latexify(ax):
@@ -169,83 +182,17 @@ def solve(t0, t1, dt, start):
 	ts, As = numpy.array(As).T
 	return ts, As
 
-def metric_depth(ts, As, eta, theta, phi):
-	mid = middle(eta, theta, phi)
-	Is = numpy.vectorize(abs)(As)
-
-	# Cut down time domain so that we don't detect minima before the estimate.
-	filt = ts >= mid
-	ts = ts[filt]
-	Is = Is[filt]
-
-	# Get lowest dip value.
-	i_dip = numpy.argmin(Is)
-	t_dip = ts[i_dip]
-	I_dip = Is[i_dip]
-
-	# Get highest peak value that happened after mid but before the dip.
-	filt = ts < t_dip
-	# ts = ts[filt]
-	Is = Is[filt]
-
-	if not Is.shape[0]:
-		return None
-
-	# TODO: Handle cases where the maximum is before the peak.
-	I_peak = numpy.amax(Is)
-
-	return (I_peak - I_dip) / I_peak
-
-def metric_linear(ts, As, eta, theta, phi):
-	mid = middle(eta, theta, phi)
-	Is = numpy.vectorize(abs)(As)
-
-	# First-order linear approximation.
-	n1 = GAMMA * numpy.cos(theta)
-	n2 = GAMMA * numpy.sin(theta) * numpy.exp(1j * phi)
-	linAs = eta * numpy.exp(GAMMA * ts) * (n1 * numpy.exp(1j * GAMMA * ts) + n2 * numpy.exp(-1j * GAMMA * ts))
-	linIs = numpy.vectorize(abs)(linAs)
-
-	# Cut down the time domain so we don't take into account anything before the estimated peak.
-	filt = ts >= mid
-	ts = ts[filt]
-	Is = Is[filt]
-	linIs = linIs[filt]
-
-	# Remove entries once the non-linear terms become out-of-hand.
-	grad = numpy.gradient(Is)
-	filt = grad < 100
-	ts = ts[filt]
-	Is = Is[filt]
-	linIs = linIs[filt]
-
-	# We'll operate on the log values for sanity reasons.
-	Is = numpy.log(Is)
-	linIs = numpy.log(linIs)
-
-	# Get the difference between linIs and Is and compute a metric from that.
-	diff = linIs - Is
-
-	# We need to ignore parts when Is > linIs.
-	filt = Is <= linIs
-	ts = ts[filt]
-	diff = diff[filt]
-	return abs(numpy.trapz(diff, ts))
-	# return numpy.sum(diff)
-
-METRICS = {
-	"depth": metric_depth,
-	"linear": metric_linear,
-}
-
 def main(config):
 	eta = config.eta
 	theta = config.theta
 	phi = config.phi
 
-	fig = plt.figure(figsize=(10, 10), dpi=80)
-	ax1 = latexify(fig.add_subplot("211"))
-	ax2 = latexify(fig.add_subplot("212"))
+	fig = plt.figure(figsize=(5, 5), dpi=80)
+	ax1 = latexify(fig.add_subplot("%d11" % (1+config.show_phase,)))
+	if config.show_phase:
+		ax2 = latexify(fig.add_subplot("212"))
+	else:
+		ax2 = None
 
 	t0 = 0
 	mid = middle(eta, theta, phi)
@@ -255,53 +202,112 @@ def main(config):
 	ts, As = solve(t0, t1, config.dt, start)
 
 	# now plot theoretical
-	ax1.set_title(r"{$\theta = %s, \eta = %s, \phi = %s$}" % (theta, eta, phi))
+	# ax1.set_title(r"{$\theta = %s, \eta = %s, \phi = %s$}" % (theta, eta, phi))
 
 	# plot integration
 	ax1.plot(ts, numpy.vectorize(abs)(As), 'k')
-	ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'k')
+	if ax2 is not None:
+		ax2.plot(ts, numpy.vectorize(cmath.phase)(As), 'k')
 
-	ax1.set_yscale("log")
+	# plot first order approximation.
+	if config.first_order:
+		n1 = GAMMA * numpy.cos(theta)
+		n2 = GAMMA * numpy.sin(theta) * numpy.exp(1j * phi)
+		linAs = eta * numpy.exp(GAMMA * ts) * (n1 * numpy.exp(1j * GAMMA * ts) + n2 * numpy.exp(-1j * GAMMA * ts))
+		ax1.plot(ts, numpy.vectorize(abs)(linAs), 'r--')
+		if ax2 is not None:
+			ax2.plot(ts, numpy.vectorize(cmath.phase)(linAs), 'r--')
+
+		if config.fill_area:
+			Is = numpy.vectorize(abs)(As)
+			linIs = numpy.vectorize(abs)(linAs)
+
+			# Cut down the time domain so we don't take into account anything before the estimated peak.
+			filt = ts >= mid
+			ts = ts[filt]
+			Is = Is[filt]
+			linIs = linIs[filt]
+
+			# Remove entries once the non-linear terms become out-of-hand.
+			grad = numpy.gradient(Is)
+			filt = grad < 100
+			ts = ts[filt]
+			Is = Is[filt]
+			linIs = linIs[filt]
+
+			# We need to ignore parts when Is > linIs.
+			filt = Is <= linIs
+			ts = ts[filt]
+			Is = Is[filt]
+			linIs = linIs[filt]
+
+			# Fill.
+			ax1.fill_between(ts, Is, linIs, color='orange')
+
+	ax1.set_yscale(config.scale)
 	ax1.set_axisbelow(True)
 	ax1.set_xlabel(r"Time ($\tau$)")
-	ax1.set_ylabel(r"Amplitude ($|A|$)")
+	ax1.set_ylabel(r"Amplitude ($|b|$)")
 	ax1.set_xlim([t0, t1])
 
-	ax1.xaxis.set_ticks([mid], minor=True)
-	ax1.xaxis.grid(True, which="minor", color="k", linestyle=":")
-	ax2.xaxis.set_ticks([mid], minor=True)
-	ax2.xaxis.grid(True, which="minor", color="k", linestyle=":")
+	if config.scale == "log":
+		ax1.set_ylim([None, 1e11])
+	elif config.scale == "linear":
+		ax1.set_ylim([0, 3])
 
-	ax2.set_axisbelow(True)
-	ax2.set_xlabel(r"Time ($\tau$)")
-	ax2.set_ylabel(r"Phase")
-	ax2.set_xlim([t0, t1])
-	ax2.set_ylim([-math.pi, math.pi])
+	# ax1.xaxis.set_ticks([mid], minor=True)
+	# ax1.xaxis.grid(True, which="minor", color="k", linestyle=":")
+	# if ax2 is not None:
+		# ax2.xaxis.set_ticks([mid], minor=True)
+		# ax2.xaxis.grid(True, which="minor", color="k", linestyle=":")
 
-	# Set ticks to represent angle.
-	ticks = numpy.linspace(-1, 1, num=9)
-	ax2.set_yticks([x*math.pi for x in ticks])
-	ax2.yaxis.set_major_formatter(matplotlib.ticker.FixedFormatter([r"$%s \pi$" % (x,) for x in ticks]))
+	if ax2 is not None:
+		ax2.set_axisbelow(True)
+		ax2.set_xlabel(r"Time ($\tau$)")
+		ax2.set_ylabel(r"Phase")
+		ax2.set_xlim([t0, t1])
+		ax2.set_ylim([-math.pi, math.pi])
+
+		# Set ticks to represent angle.
+		ticks = numpy.linspace(-1, 1, num=9)
+		ax2.set_yticks([x*math.pi for x in ticks])
+		ax2.yaxis.set_major_formatter(matplotlib.ticker.FixedFormatter([r"$%s \pi$" % (x,) for x in ticks]))
 
 	plt.legend()
 	fig.tight_layout()
 
-	plt.show()
+	if config.out:
+		plt.savefig(config.out)
+	else:
+		plt.show()
 
 
 if __name__ == "__main__":
 	def __wrapped_main__():
 		parser = argparse.ArgumentParser(description="Searches the parameter space (eta, theta, phi) for the PQS ODE using the set of metrics given.")
+		# save plot
+		parser.add_argument("--out", dest="out", type=str, default=None, help="Output to given filename rather than displaying in an interactive window (default: disabled)")
 		# integrator arguments
 		parser.add_argument("-dt", dest="dt", type=float, default=0.01, help="Time spacing for integration (default: 0.01).")
-		# metric arguments
-		# parser.add_argument("-m", "--metric", dest="metrics", action="append", default=["depth"], help="Set of metrics from {depth, linear} to compute (default: [depth]).")
+		# plot arguments
+		parser.add_argument("-fo", "--first-order", dest="first_order", default=False, action="store_const", const=True, help="Plot the first order approximation of the curve.")
+		parser.add_argument("--no-first-order", dest="first_order", default=False, action="store_const", const=False, help="Do not plot the first order approximation of the curve (default).")
+		parser.add_argument("-fa", "--fill-area", dest="fill_area", default=False, action="store_const", const=True, help="Fill the area between the first order approximation and the integral.")
+		parser.add_argument("--no-fill-area", dest="fill_area", default=False, action="store_const", const=False, help="Do not fill the area between the first order approximation and the integral (default).")
+		parser.add_argument("-pp", "--plot-phase", dest="show_phase", default=False, action="store_const", const=True, help="Show the phase of the curve.")
+		parser.add_argument("--no-plot-phase", dest="show_phase", default=False, action="store_const", const=False, help="Do not show the phase of the curve. (default)")
+		parser.add_argument("-sc", "--scale",  dest="scale", default="log", help="The scaling to use for the y axis (default: log).")
 		# parameter arguments
 		parser.add_argument("-e", "--eta", dest="eta", type=float, required=True, help="Eta value.")
 		parser.add_argument("-t", "--theta", dest="theta", type=float, required=True, help="Theta value.")
 		parser.add_argument("-p", "--phi", dest="phi", type=float, required=True, help="Phi value.")
 
 		config = parser.parse_args()
+
+		if config.fill_area and not config.first_order:
+			print("--fill-area requires --first-order")
+			sys.exit(1)
+
 		main(config)
 
 	__wrapped_main__()

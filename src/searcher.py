@@ -22,32 +22,10 @@ import math
 import argparse
 import random
 
-import matplotlib
-matplotlib.use("TkAgg")
-import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid.anchored_artists import AnchoredText
 import numpy
 import numpy.random
 import scipy
 import scipy.integrate
-
-SPINE_COLOR = "black"
-
-def latexify(ax):
-	for spine in ["top", "right"]:
-		ax.spines[spine].set_visible(False)
-
-	for spine in ["left", "bottom"]:
-		ax.spines[spine].set_color(SPINE_COLOR)
-		ax.spines[spine].set_linewidth(0.5)
-
-	ax.xaxis.set_ticks_position("bottom")
-	ax.yaxis.set_ticks_position("left")
-
-	for axis in [ax.xaxis, ax.yaxis]:
-		axis.set_tick_params(direction="out", color=SPINE_COLOR)
-
-	return ax
 
 def csv_column_write(f, cols, fieldnames):
 	import csv
