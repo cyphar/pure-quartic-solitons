@@ -144,7 +144,7 @@ def init(t, eta, theta, phi):
 			alpha.imag, beta.imag, gamma.imag, delta.imag]
 
 def middle(eta, theta, phi):
-	return math.log((2 * GAMMA**2) / (eta * (1 + math.sin(theta) ** 2))) / GAMMA
+	return math.log((2*GAMMA**2) / (eta * (1 + math.sin(theta) ** 2))) / GAMMA
 
 # We need to first convert the key equation from the paper to an ODE. If
 # you assume that A is of the form:

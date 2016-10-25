@@ -109,8 +109,7 @@ def init(t, eta, theta, phi):
 			alpha.imag, beta.imag, gamma.imag, delta.imag]
 
 def middle(eta, theta, phi):
-	return math.log((2 * GAMMA**2) / (eta * (1 + math.sin(theta) ** 2))) / GAMMA
-	# return math.log((2 * GAMMA**2) / eta) / GAMMA
+	return math.log((2*GAMMA**2) / (eta * (1 + math.sin(theta) ** 2))) / GAMMA
 
 # We need to first convert the key equation from the paper to an ODE. If
 # you assume that A is of the form:
@@ -228,18 +227,30 @@ def main(config):
 	# Convert *_space limits to something sane.
 	etaspace = numpy.array([])
 	for etas in config.eta_space:
-		low, high = eval(etas)
-		space = numpy.linspace(low, high, num=config.eta_samples)
+		rng = eval(etas)
+		try:
+			high, low = rng
+			space = numpy.linspace(low, high, num=config.eta_samples)
+		except TypeError:
+			space = numpy.array([rng])
 		etaspace = numpy.concatenate((etaspace, space))
 	thetaspace = numpy.array([])
 	for thetas in config.theta_space:
-		low, high = eval(thetas)
-		space = numpy.linspace(low, high, num=config.theta_samples)
+		rng = eval(thetas)
+		try:
+			high, low = rng
+			space = numpy.linspace(low, high, num=config.theta_samples)
+		except TypeError:
+			space = numpy.array([rng])
 		thetaspace = numpy.concatenate((thetaspace, space))
 	phispace = numpy.array([])
 	for phis in config.phi_space:
-		low, high = eval(phis)
-		space = numpy.linspace(low, high, num=config.phi_samples)
+		rng = eval(phis)
+		try:
+			high, low = rng
+			space = numpy.linspace(low, high, num=config.phi_samples)
+		except TypeError:
+			space = numpy.array([rng])
 		phispace = numpy.concatenate((phispace, space))
 
 	print("ETA   :: %s <- %s" % (config.eta_space, config.eta_samples))
