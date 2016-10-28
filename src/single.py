@@ -250,6 +250,12 @@ def main(config):
 	ax1.set_ylabel(r"Amplitude ($|b|$)")
 	ax1.set_xlim([t0, t1])
 
+	# ax1.text(t0 + 4, 1e10, "linear", size=12, ha='left', va='top')
+	# ax1.text(t1 - 3, 1e10, "non-linear", size=12, ha='right', va='top')
+	# if ax2 is not None:
+		# ax2.text(t0 + 4, 1e10, "linear", size=12, ha='left', va='top')
+		# ax2.text(t1 - 3, 1e10, "non-linear", size=12, ha='right', va='top')
+
 	if config.scale == "log":
 		ax1.set_ylim([None, 1e11])
 	elif config.scale == "linear":
