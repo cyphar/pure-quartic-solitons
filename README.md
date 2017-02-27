@@ -1,4 +1,5 @@
 ## Pure Quartic Solitons ##
+[![DOI](https://zenodo.org/badge/65123041.svg)](https://zenodo.org/badge/latestdoi/65123041)
 
 ```
 Supervisors: Martijn de Sterke, Andrea Blanco Redondo
